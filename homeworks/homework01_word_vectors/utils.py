@@ -108,12 +108,10 @@ class TextVectorizer:
             vector.extend([np.zeros(self.word_vectorizer.vector_size) for _ in range(pad_size)])
         elif len(vector) > self.text_maxlen:
             vector = vector[:self.text_maxlen]
-        vector = np.array(vector)
+        vector = np.stack(vector, axis=1)
         return vector
 
     def transform(self, dataset):
         text_tensor = np.vectorize(self.vectorize_text, otypes=[np.ndarray])(dataset)
         text_tensor = np.array(text_tensor.tolist())
         return text_tensor
-
-
