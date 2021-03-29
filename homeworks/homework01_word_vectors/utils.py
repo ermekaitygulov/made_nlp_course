@@ -47,10 +47,10 @@ class Splitter:
         :param text: text to split
         :return: Counter
         """
-        ngram_list = Counter()
+        ngram_counter = Counter()
         for n in self.ngrams:
-            ngram_list.update(self.get_ngrams(text, n))
-        return ngram_list
+            ngram_counter.update(self.get_ngrams(text, n))
+        return ngram_counter
 
 
 class TextTransformer(ABC):
@@ -74,7 +74,7 @@ class BagOfWords(TextTransformer):
         self.set_max_feat(max_feat)
 
     def transform_text(self, text):
-        text_counter = Counter(text.split())
+        text_counter = self.splitter.split_text(text)
         freq_feature = [text_counter[word] for word in self.vocabulary]
         return np.array(freq_feature, 'float32')
 
@@ -95,7 +95,7 @@ class TFiDF(TextTransformer):
         self.set_max_feat(max_feat)
 
     def transform_text(self, text):
-        text_counter = Counter(self.splitter.split_text(text))
+        text_counter = self.splitter.split_text(text)
         tf = [text_counter[item] for item in self.vocabulary]
         tf = np.array(tf)
         tfidf = tf * self.idf
