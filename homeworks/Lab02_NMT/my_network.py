@@ -10,6 +10,15 @@ import random
 import math
 import time
 
+CATALOG = {}
+
+
+def add_to_catalog(name):
+    def add_wrapper(class_to_add):
+        CATALOG[name] = class_to_add
+        return class_to_add
+    return add_wrapper
+
 
 class Encoder(nn.Module):
     def __init__(self, input_dim, emb_dim, hid_dim, n_layers, dropout):
