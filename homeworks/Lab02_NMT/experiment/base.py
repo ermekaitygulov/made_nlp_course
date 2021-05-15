@@ -1,3 +1,4 @@
+import random
 import time
 from abc import ABC, abstractmethod
 from typing import Type, Dict
@@ -55,12 +56,14 @@ class Experiment(ABC):
                 generated_text.extend([get_text(x, vocab) for x in output[1:].detach().cpu().numpy().T])
 
         bleu = corpus_bleu([[text] for text in original_text], generated_text) * 100
+        print(f'Bleu: {bleu:.3f}')
         table = wandb.Table(data=[[self.time // 60, bleu]], columns=["time_spent (min)", "bleu"])
-        wandb.log({"bleu_score": wandb.plot.scatter(
-            table,
-            "time_spent (min)",
-            "bleu", title="BLEU score")
-        })
+        if wandb.run:
+            wandb.log({"bleu_score": wandb.plot.scatter(
+                table,
+                "time_spent (min)",
+                "bleu", title="BLEU score")
+            })
 
     def read_data(self):
         data_config = self.config['data']
@@ -71,14 +74,17 @@ class Experiment(ABC):
             fields=[('trg', self.target), ('src', self.source)]
         )
         split_ratio = [data_config[f'{split}_size'] for split in ['train', 'val', 'test']]
-        train_data, valid_data, test_data = dataset.split(split_ratio=split_ratio)
+
+        random.seed(42)
+        random_state = random.getstate()
+        train_data, valid_data, test_data = dataset.split(split_ratio=split_ratio, random_state=random_state)
         self.source.build_vocab(train_data, min_freq=data_config['word_min_freq'])
         self.target.build_vocab(train_data, min_freq=data_config['word_min_freq'])
         train_iterator, valid_iterator, test_iterator = BucketIterator.splits(
             (train_data, valid_data, test_data),
             batch_size=data_config['batch_size'],
             device=self.device,
-            sort_key=self._len_sort_key
+            sort_key=self._len_sort_key,
         )
         return train_iterator, valid_iterator, test_iterator
 
@@ -89,6 +95,8 @@ class Experiment(ABC):
         input_dim = len(self.source.vocab)
         output_dim = len(self.target.vocab)
         model = model_class(input_dim, output_dim, self.device, **model_config['params'])
+        if 'model_path' in self.config:
+            model.load(self.config['model_path'])
         model.to(self.device)
         return model
 

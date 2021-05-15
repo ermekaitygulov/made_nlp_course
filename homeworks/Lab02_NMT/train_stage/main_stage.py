@@ -78,7 +78,8 @@ class MainStage:
                 log_dict['train_step'] = global_step
                 if tqdm_iterator._ema_dt():
                     log_dict['train_speed(batch/sec)'] = tqdm_iterator._ema_dn() / tqdm_iterator._ema_dt()
-                wandb.log({self.name: log_dict})
+                if wandb.run:
+                    wandb.log({self.name: log_dict})
                 tqdm_iterator.set_postfix(train_loss=mean_loss)
 
             global_step += 1
@@ -102,7 +103,8 @@ class MainStage:
                     mean_loss = np.mean(loss_window)
                     log_dict['val_loss'] = mean_loss
                     log_dict['val_step'] = global_step
-                    wandb.log({self.name: log_dict})
+                    if wandb.run:
+                        wandb.log({self.name: log_dict})
                     tqdm_iterator.set_postfix(train_loss=mean_loss)
 
                 global_step += 1

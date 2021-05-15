@@ -1,6 +1,5 @@
 """script for train"""
-from argparse import ArgumentParser, FileType
-import sys
+from argparse import ArgumentParser
 
 import torch
 import wandb
@@ -20,6 +19,7 @@ def parser_conf(parser):
                         default="baseline")
     parser.add_argument("--config", "-c")
     parser.add_argument("--gpu", action="store_true")
+    parser.add_argument("--wandb", action="store_true")
     parser.set_defaults(callback=train_callback)
     return parser
 
@@ -27,7 +27,8 @@ def parser_conf(parser):
 def train_callback(args):
     experiment_name = args.name
     experiment_config = read_config(args.config)
-    init_wandb(args.name, experiment_config)
+    if args.wandb:
+        init_wandb(args.name, experiment_config)
 
     device = configure_device(args.gpu)
     experiment = EXPERIMENT_CATALOG[experiment_name](experiment_config, device)
