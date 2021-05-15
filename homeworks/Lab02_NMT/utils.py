@@ -1,8 +1,16 @@
+from collections import namedtuple
+
+
+Task = namedtuple('Task', ['train', 'val', 'test'])
+
 
 def flatten(l):
     return [item for sublist in l for item in sublist]
 
-def remove_tech_tokens(mystr, tokens_to_remove=['<eos>', '<sos>', '<unk>', '<pad>']):
+
+def remove_tech_tokens(mystr, tokens_to_remove=None):
+    if tokens_to_remove is None:
+        tokens_to_remove = ['<eos>', '<sos>', '<unk>', '<pad>']
     return [x for x in mystr if x not in tokens_to_remove]
 
 
@@ -31,3 +39,10 @@ def generate_translation(src, trg, model, TRG_vocab):
     print('Original: {}'.format(' '.join(original)))
     print('Generated: {}'.format(' '.join(generated)))
     print()
+
+
+def add_to_catalog(name, catalog):
+    def add_wrapper(class_to_add):
+        catalog[name] = class_to_add
+        return class_to_add
+    return add_wrapper
