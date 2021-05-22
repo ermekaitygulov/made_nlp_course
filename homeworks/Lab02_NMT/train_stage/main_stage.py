@@ -22,13 +22,8 @@ class MainStage:
         self.name = stage_name
         self.model = model
         self.opt = self.init_opt()
+        self.lr_scheduler = self.init_scheduler()
         self.criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
-
-    def init_opt(self):
-        opt_class = getattr(optim, self.config['opt_class'])
-        opt_params = self.config['opt_params']
-        opt = opt_class(self.model.parameters(), **opt_params)
-        return opt
 
     def train(self, train_iterator, val_iterator):
         train_step = 0
@@ -68,6 +63,8 @@ class MainStage:
             # Let's clip the gradient
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['grad_clip'])
             self.opt.step()
+            if self.lr_scheduler:
+                self.lr_scheduler.step()
 
             epoch_loss += loss.item()
             loss_window.append(loss.cpu().data.numpy())
@@ -76,6 +73,7 @@ class MainStage:
                 mean_loss = np.mean(loss_window)
                 log_dict['train_loss'] = mean_loss
                 log_dict['train_step'] = global_step
+                log_dict['learning_rate'] = self.opt.param_groups[0]["lr"]
                 if tqdm_iterator._ema_dt():
                     log_dict['train_speed(batch/sec)'] = tqdm_iterator._ema_dn() / tqdm_iterator._ema_dt()
                 if wandb.run:
@@ -128,3 +126,18 @@ class MainStage:
 
         loss = self.criterion(output, trg)
         return loss
+
+    def init_opt(self):
+        opt_class = getattr(optim, self.config['opt_class'])
+        opt_params = self.config['opt_params']
+        opt = opt_class(self.model.parameters(), **opt_params)
+        return opt
+
+    def init_scheduler(self):
+        # TODO refactor
+        if 'scheduler_class' not in self.config:
+            return None
+        scheduler_class = getattr(optim.lr_scheduler, self.config['scheduler_class'])
+        scheduler_params = self.config['scheduler_params']
+        scheduler = scheduler_class(self.opt, **scheduler_params)
+        return scheduler

@@ -8,13 +8,21 @@ data:
 pretrain:
   epoch: 10
   opt_class: Adam
+  scheduler_class: CosineAnnealingWarmRestarts
+  scheduler_params:
+    T_0: 625
+    T_mult: 2
   grad_clip: 1
 train:
   epoch: 10
   opt_class: Adam
+  scheduler_class: CosineAnnealingWarmRestarts
+  scheduler_params:
+    T_0: 625
+    T_mult: 2
   grad_clip: 1
 model:
-  name: lstm_enc_dec
+  name: lstm_attn
   params:
     hid_dim: &hid_dim 256
     n_layers: &n_layers 2
@@ -29,3 +37,6 @@ model:
       dropout: 0.5
       hid_dim: *hid_dim
       n_layers: *n_layers
+    attention:
+      enc_dim: *hid_dim
+      dec_dim: *hid_dim
