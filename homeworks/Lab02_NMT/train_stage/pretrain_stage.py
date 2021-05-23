@@ -5,7 +5,7 @@ class PretrainStage(MainStage):
     def compute_batch_loss(self, batch):
         src = batch.src
 
-        output, _, _, _ = self.model.encoder(src[:-1])  # turn off teacher forcing
+        output = self.model.encoder(src[:-1])['prediction']  # turn off teacher forcing
 
         # trg = [trg sent len, batch size]
         # output = [trg sent len, batch size, output dim]

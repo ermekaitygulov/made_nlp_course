@@ -38,12 +38,18 @@ class Encoder(nn.Module):
         embedded = self.dropout(embedded)
         # embedded = [src sent len, batch size, emb dim]
 
-        output, (hidden, cell) = self.rnn(embedded)
-        # outputs = [src sent len, batch size, hid dim * n directions]
+        rnn_output, (hidden, cell) = self.rnn(embedded)
+        # rnn_outputs = [src sent len, batch size, hid dim * n directions]
         # hidden = [n layers * n directions, batch size, hid dim]
         # cell = [n layers * n directions, batch size, hid dim]
-        prediction = self.out(output)
-        return prediction, output, hidden, cell
+        prediction = self.out(rnn_output)
+        output = {
+            'rnn_out': rnn_output,
+            'rnn_hidden': hidden,
+            'rnn_cell': cell,
+            'prediction': prediction
+        }
+        return output
 
 
 class Attention(nn.Module):
@@ -70,7 +76,11 @@ class Attention(nn.Module):
         hid = self.attn_combine(hid)
         hid = hid.transpose(0, 1).contiguous()
         # hid = [n_layers, batch_size, hid_dim]
-        return hid
+        output = {
+            'hidden': hid,
+            'attention_map': attn_scores,
+        }
+        return output
     
 
 class Decoder(nn.Module):
@@ -125,12 +135,17 @@ class Decoder(nn.Module):
         # hidden = [n layers, batch size, hid dim]
         # cell = [n layers, batch size, hid dim]
 
-        output, (hidden, cell) = self.rnn(embedded, (hidden, cell))
-        prediction = self.out(output.squeeze(0))
-        
+        rnn_output, (hidden, cell) = self.rnn(embedded, (hidden, cell))
+        prediction = self.out(rnn_output.squeeze(0))
+        output = {
+            'rnn_out': rnn_output,
+            'rnn_hidden': hidden,
+            'rnn_cell': cell,
+            'prediction': prediction
+        }
         # prediction = [batch size, output dim]
         
-        return prediction, hidden, cell
+        return output
 
 
 @add_to_catalog('lstm_enc_dec', NN_CATALOG)
@@ -162,14 +177,15 @@ class Seq2Seq(BaseModel):
         outputs = torch.zeros(max_len, batch_size, trg_vocab_size).to(self.device)
         
         # last hidden state of the encoder is used as the initial hidden state of the decoder
-        _, _, hidden, cell = self.encoder(src)
-        
+        enc_output = self.encoder(src)
+        hidden, cell = enc_output['rnn_hidden'], enc_output['rnn_cell']
+
         # first input to the decoder is the <sos> tokens
         dec_input = trg[0, :]
         
         for t in range(1, max_len):
-            
-            output, hidden, cell = self.decoder(dec_input, hidden, cell)
+            dec_output = self.decoder(dec_input, hidden, cell)
+            output, hidden, cell = dec_output['rnn_out'], dec_output['rnn_hidden'], dec_output['rnn_cell']
             outputs[t] = output
             teacher_force = random.random() < self.teacher_forcing_ratio
             top1 = output.max(1)[1]
@@ -192,7 +208,7 @@ class Seq2Seq(BaseModel):
         assert self.encoder.n_layers == self.decoder.n_layers, \
             "Encoder and decoder must have equal number of layers!"
 
-    def forward(self, src, trg):
+    def forward(self, src, trg, teacher_forcing_ratio=0.):
         # src = [src sent len, batch size]
         # trg = [trg sent len, batch size]
         # teacher_forcing_ratio is probability to use teacher forcing
@@ -207,16 +223,18 @@ class Seq2Seq(BaseModel):
         outputs = torch.zeros(max_len, batch_size, trg_vocab_size).to(self.device)
 
         # last hidden state of the encoder is used as the initial hidden state of the decoder
-        _, enc_outputs, hidden, cell = self.encoder(src)
+        enc_output = self.encoder(src)
+        enc_outputs, hidden, cell = enc_output['rnn_out'], enc_output['rnn_hidden'], enc_output['rnn_cell']
 
         # first input to the decoder is the <sos> tokens
         dec_input = trg[0, :]
 
         for t in range(1, max_len):
-            output, hidden, cell = self.decoder(dec_input, hidden, cell)
-            hidden = self.attention(enc_outputs, hidden)
+            dec_output = self.decoder(dec_input, hidden, cell)
+            output, hidden, cell = dec_output['prediction'], dec_output['rnn_hidden'], dec_output['rnn_cell']
+            hidden = self.attention(enc_outputs, hidden)['hidden']
             outputs[t] = output
-            teacher_force = random.random() < self.teacher_forcing_ratio
+            teacher_force = random.random() < teacher_forcing_ratio
             top1 = output.max(1)[1]
             dec_input = (top1 if teacher_force else trg[t])
 

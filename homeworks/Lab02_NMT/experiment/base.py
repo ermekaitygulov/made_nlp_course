@@ -46,7 +46,7 @@ class Experiment(ABC):
                 src = batch.src
                 trg = batch.trg
 
-                output = self.model(src, trg)  # turn off teacher forcing
+                output = self.model(src, trg, 1.)  # turn on teacher forcing
 
                 # trg = [trg sent len, batch size]
                 # output = [trg sent len, batch size, output dim]
