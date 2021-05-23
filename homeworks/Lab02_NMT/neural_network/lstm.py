@@ -196,13 +196,15 @@ class AttnDecoder(nn.Module):
         # cell = [n layers, batch size, hid dim]
 
         rnn_output, (hidden, cell) = self.rnn(embedded, (hidden, cell))
-        hidden = self.attention(enc_outputs, hidden)['hidden']
+        attn_output = self.attention(enc_outputs, hidden)
+        hidden = attn_output['hidden']
         prediction = self.out(hidden[-1])
         output = {
             'rnn_out': rnn_output,
             'rnn_hidden': hidden,
             'rnn_cell': cell,
-            'prediction': prediction
+            'prediction': prediction,
+            'attention_map': attn_output['attention_map']
         }
         # prediction = [batch size, output dim]
 
