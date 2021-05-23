@@ -18,5 +18,6 @@ class Baseline(Experiment):
         pad_idx = self.target.vocab.stoi['<pad>']
         pretrain_stage = PretrainStage(self.model, 'pretrain_stage', self.config['pretrain'], pad_idx)
         main_stage = MainStage(self.model, 'main_stage', self.config['train'], pad_idx)
-        stage = ComposeStage([pretrain_stage,  main_stage])
+        sgd_train_stage = MainStage(self.model, 'sgd_stage', self.config['sgd_train'], pad_idx)
+        stage = ComposeStage([pretrain_stage,  main_stage, sgd_train_stage])
         return stage

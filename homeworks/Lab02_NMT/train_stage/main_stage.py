@@ -1,5 +1,6 @@
 import math
 from collections import deque
+import os
 
 import numpy as np
 import torch
@@ -13,7 +14,12 @@ class MainStage:
     default_config = {
         'opt_params': {},
         'log_window_size': 10,
-        'opt_class': 'Adam'
+        'opt_class': 'Adam',
+        'teacher_enforce': {
+            'ratio_start': 0.,
+            'ratio_growth': 0.,
+            'ratio_max': 0.
+        }
     }
 
     def __init__(self, model, stage_name, stage_config, pad_idx):
@@ -24,6 +30,7 @@ class MainStage:
         self.opt = self.init_opt()
         self.lr_scheduler = self.init_scheduler()
         self.criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
+        self.teacher_enforce_ratio = self.config['teacher_enforce']['ratio_start']
 
     def train(self, train_iterator, val_iterator):
         train_step = 0
@@ -40,9 +47,15 @@ class MainStage:
                 val_step,
             )
 
+            self.increase_teacher_ratio()
             if valid_loss < best_valid_loss:
+                if wandb.run:
+                    save_path = os.path.join('model_save', wandb.run.name)
+                    os.makedirs(save_path, exist_ok=True)
+                    torch.save(self.model.state_dict(), os.path.join(save_path, f'{self.name}-model.pt'))
+                else:
+                    torch.save(self.model.state_dict(), f'{self.name}-model.pt')
                 best_valid_loss = valid_loss
-                torch.save(self.model.state_dict(), f'{self.name}-model.pt')
 
             print(f'Epoch: {epoch + 1:02}')
             print(f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}')
@@ -74,6 +87,8 @@ class MainStage:
                 log_dict['train_loss'] = mean_loss
                 log_dict['train_step'] = global_step
                 log_dict['learning_rate'] = self.opt.param_groups[0]["lr"]
+                log_dict['teacher_ratio'] = self.teacher_enforce_ratio
+
                 if tqdm_iterator._ema_dt():
                     log_dict['train_speed(batch/sec)'] = tqdm_iterator._ema_dn() / tqdm_iterator._ema_dt()
                 if wandb.run:
@@ -109,11 +124,13 @@ class MainStage:
 
         return epoch_loss / len(iterator), global_step
 
-    def compute_batch_loss(self, batch):
+    def compute_batch_loss(self, batch, val=False):
         src = batch.src
         trg = batch.trg
-
-        output = self.model(src, trg)  # turn off teacher forcing
+        if val:
+            output = self.model(src, trg, 1.)
+        else:
+            output = self.model(src, trg, self.teacher_enforce_ratio)
 
         # trg = [trg sent len, batch size]
         # output = [trg sent len, batch size, output dim]
@@ -126,6 +143,12 @@ class MainStage:
 
         loss = self.criterion(output, trg)
         return loss
+
+    def increase_teacher_ratio(self):
+        growth = self.config['teacher_enforce']['ratio_growth']
+        max_ratio = self.config['teacher_enforce']['ratio_max']
+        new_ratio = min(self.teacher_enforce_ratio + growth, max_ratio)
+        self.teacher_enforce_ratio = new_ratio
 
     def init_opt(self):
         opt_class = getattr(optim, self.config['opt_class'])

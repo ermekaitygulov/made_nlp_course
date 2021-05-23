@@ -6,7 +6,7 @@ data:
   path: '../../datasets/Machine_translation_EN_RU/data.txt'
   word_min_freq: 5
 pretrain:
-  epoch: 10
+  epoch: 0
   opt_class: Adam
   scheduler_class: CosineAnnealingWarmRestarts
   scheduler_params:
@@ -14,15 +14,36 @@ pretrain:
     T_mult: 2
   grad_clip: 1
 train:
-  epoch: 10
+  epoch: 0
   opt_class: Adam
   scheduler_class: CosineAnnealingWarmRestarts
   scheduler_params:
     T_0: 625
     T_mult: 2
   grad_clip: 1
+  teacher_enforce:
+    ratio_start: 0.0
+    ratio_growth: 0.1
+    ratio_max: 0.5
+sgd_train:
+  epoch: 5
+  opt_class: SGD
+  opt_params:
+    lr: 0.0001
+    momentum: 0.9
+    nesterov: True
+  scheduler_class: CosineAnnealingWarmRestarts
+  scheduler_params:
+    T_0: 2500
+    T_mult: 2
+  grad_clip: 1
+  teacher_enforce:
+    ratio_start: 0.5
+    ratio_growth: 0.1
+    ratio_max: 0.8
+model_path: 'main_stage-model.pt'
 model:
-  name: lstm_attn
+  name: lstm_dec_attn
   params:
     hid_dim: &hid_dim 256
     n_layers: &n_layers 2
@@ -37,6 +58,3 @@ model:
       dropout: 0.5
       hid_dim: *hid_dim
       n_layers: *n_layers
-    attention:
-      enc_dim: *hid_dim
-      dec_dim: *hid_dim

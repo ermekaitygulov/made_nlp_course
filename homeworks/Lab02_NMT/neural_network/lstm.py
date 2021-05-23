@@ -56,6 +56,7 @@ class Attention(nn.Module):
     def __init__(self, enc_dim, dec_dim):
         super(Attention, self).__init__()
         self.attn_combine = nn.Linear(enc_dim + dec_dim, dec_dim)
+        self.tanh = nn.Tanh()
 
     def forward(self, enc_outputs, dec_hid):
         # enc_outputs = [seq_len, batch_size, hid_dim]
@@ -73,9 +74,11 @@ class Attention(nn.Module):
         context = torch.bmm(enc_outputs.transpose(1, 2), attn_scores)
         # context = [batch_size, n_layers, hid_dim]
         hid = torch.cat((context.transpose(1, 2), dec_hid), -1)
-        hid = self.attn_combine(hid)
         hid = hid.transpose(0, 1).contiguous()
         # hid = [n_layers, batch_size, hid_dim]
+        hid = self.attn_combine(hid)
+        hid = self.tanh(hid)
+
         output = {
             'hidden': hid,
             'attention_map': attn_scores,
@@ -145,6 +148,64 @@ class Decoder(nn.Module):
         }
         # prediction = [batch size, output dim]
         
+        return output
+
+
+class AttnDecoder(nn.Module):
+    def __init__(self, output_dim, emb_dim, hid_dim, n_layers, dropout):
+        super().__init__()
+
+        self.emb_dim = emb_dim
+        self.hid_dim = hid_dim
+        self.output_dim = output_dim
+        self.n_layers = n_layers
+        self.dropout = dropout
+
+        self.embedding = nn.Embedding(
+            num_embeddings=output_dim,
+            embedding_dim=emb_dim
+        )
+        self.dropout = nn.Dropout(p=dropout)
+        self.rnn = nn.LSTM(
+            input_size=emb_dim,
+            hidden_size=hid_dim,
+            num_layers=n_layers,
+            dropout=dropout
+        )
+        self.attention = Attention(hid_dim, hid_dim)
+        self.out = nn.Linear(
+            in_features=hid_dim,
+            out_features=output_dim
+        )
+
+    def forward(self, x, hidden, cell, enc_outputs):
+        x = x.unsqueeze(0)
+
+        # input = [1, batch size]
+
+        embedded = self.dropout(self.embedding(x))
+        # embedded = [1, batch size, emb dim]
+
+        # output = [sent len, batch size, hid dim * n directions]
+        # hidden = [n layers * n directions, batch size, hid dim]
+        # cell = [n layers * n directions, batch size, hid dim]
+
+        # sent len and n directions will always be 1 in the decoder, therefore:
+        # output = [1, batch size, hid dim]
+        # hidden = [n layers, batch size, hid dim]
+        # cell = [n layers, batch size, hid dim]
+
+        rnn_output, (hidden, cell) = self.rnn(embedded, (hidden, cell))
+        hidden = self.attention(enc_outputs, hidden)['hidden']
+        prediction = self.out(hidden[-1])
+        output = {
+            'rnn_out': rnn_output,
+            'rnn_hidden': hidden,
+            'rnn_cell': cell,
+            'prediction': prediction
+        }
+        # prediction = [batch size, output dim]
+
         return output
 
 
@@ -233,6 +294,50 @@ class Seq2Seq(BaseModel):
             dec_output = self.decoder(dec_input, hidden, cell)
             output, hidden, cell = dec_output['prediction'], dec_output['rnn_hidden'], dec_output['rnn_cell']
             hidden = self.attention(enc_outputs, hidden)['hidden']
+            outputs[t] = output
+            teacher_force = random.random() < teacher_forcing_ratio
+            top1 = output.max(1)[1]
+            dec_input = (top1 if teacher_force else trg[t])
+
+        return outputs
+
+
+@add_to_catalog('lstm_dec_attn', NN_CATALOG)
+class Seq2Seq(BaseModel):
+    def __init__(self, input_dim, output_dim, device, **kwargs):
+        super().__init__(input_dim, output_dim, device, **kwargs)
+
+        self.encoder = Encoder(input_dim, **kwargs['encoder'])
+        self.decoder = AttnDecoder(output_dim, **kwargs['decoder'])
+        assert self.encoder.hid_dim == self.decoder.hid_dim, \
+            "Hidden dimensions of encoder and decoder must be equal!"
+        assert self.encoder.n_layers == self.decoder.n_layers, \
+            "Encoder and decoder must have equal number of layers!"
+
+    def forward(self, src, trg, teacher_forcing_ratio=0.):
+        # src = [src sent len, batch size]
+        # trg = [trg sent len, batch size]
+        # teacher_forcing_ratio is probability to use teacher forcing
+        # e.g. if teacher_forcing_ratio is 0.75 we use ground-truth inputs 75% of the time
+
+        # Again, now batch is the first dimension instead of zero
+        batch_size = trg.shape[1]
+        max_len = trg.shape[0]
+        trg_vocab_size = self.decoder.output_dim
+
+        # tensor to store decoder outputs
+        outputs = torch.zeros(max_len, batch_size, trg_vocab_size).to(self.device)
+
+        # last hidden state of the encoder is used as the initial hidden state of the decoder
+        enc_output = self.encoder(src)
+        enc_outputs, hidden, cell = enc_output['rnn_out'], enc_output['rnn_hidden'], enc_output['rnn_cell']
+
+        # first input to the decoder is the <sos> tokens
+        dec_input = trg[0, :]
+
+        for t in range(1, max_len):
+            dec_output = self.decoder(dec_input, hidden, cell, enc_outputs)
+            output, hidden, cell = dec_output['prediction'], dec_output['rnn_hidden'], dec_output['rnn_cell']
             outputs[t] = output
             teacher_force = random.random() < teacher_forcing_ratio
             top1 = output.max(1)[1]
