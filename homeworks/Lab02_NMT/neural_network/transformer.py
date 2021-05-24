@@ -11,8 +11,8 @@ from utils import add_to_catalog
 
 @add_to_catalog('transformer', NN_CATALOG)
 class Transformer(BaseModel):
-    def __init__(self, input_dim, output_dim, device, pad_idx, emb_dim, **kwargs):
-        super(Transformer, self).__init__(input_dim, output_dim, device, pad_idx, **kwargs)
+    def __init__(self, input_dim, output_dim, device, trg_vocab, emb_dim, **kwargs):
+        super(Transformer, self).__init__(input_dim, output_dim, device, trg_vocab, **kwargs)
         self.enc_embedding = nn.Embedding(
             num_embeddings=input_dim,
             embedding_dim=emb_dim
@@ -111,8 +111,8 @@ class Transformer(BaseModel):
 
 @add_to_catalog('hybrid', NN_CATALOG)
 class Hybrid(BaseModel):
-    def __init__(self, input_dim, output_dim, device, pad_idx, emb_dim, **kwargs):
-        super(Hybrid, self).__init__(input_dim, output_dim, device, pad_idx, **kwargs)
+    def __init__(self, input_dim, output_dim, device, trg_vocab, emb_dim, **kwargs):
+        super(Hybrid, self).__init__(input_dim, output_dim, device, trg_vocab, **kwargs)
         self.enc_embedding = nn.Embedding(
             num_embeddings=input_dim,
             embedding_dim=emb_dim

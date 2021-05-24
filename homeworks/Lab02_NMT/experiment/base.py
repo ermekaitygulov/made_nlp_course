@@ -46,14 +46,13 @@ class Experiment(ABC):
                 src = batch.src
                 trg = batch.trg
 
-                output = self.model(src, trg, 1.)  # turn on teacher forcing
+                output = self.model.gen_translate(src, trg)
 
                 # trg = [trg sent len, batch size]
                 # output = [trg sent len, batch size, output dim]
-                output = output.argmax(dim=-1)
 
                 original_text.extend([get_text(x, vocab) for x in trg.cpu().numpy().T])
-                generated_text.extend([get_text(x, vocab) for x in output[1:].detach().cpu().numpy().T])
+                generated_text.extend([get_text(x, vocab) for x in output])
 
         bleu = corpus_bleu([[text] for text in original_text], generated_text) * 100
         print(f'Bleu: {bleu:.3f}')
@@ -94,8 +93,7 @@ class Experiment(ABC):
 
         input_dim = len(self.source.vocab)
         output_dim = len(self.target.vocab)
-        pad_idx = self.target.vocab.stoi['<pad>']
-        model = model_class(input_dim, output_dim, self.device, pad_idx, **model_config['params'])
+        model = model_class(input_dim, output_dim, self.device, self.target.vocab, **model_config['params'])
         if 'model_path' in self.config:
             model.load(self.config['model_path'])
         model.to(self.device)
