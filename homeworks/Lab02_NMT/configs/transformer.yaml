@@ -3,7 +3,7 @@ data:
   val_size: 0.15
   test_size: 0.05
   batch_size: 64
-  path: '../../datasets/Machine_translation_EN_RU/test_data.txt'
+  path: '../../datasets/Machine_translation_EN_RU/data.txt'
   word_min_freq: 5
 pretrain:
   epoch: 0
@@ -14,7 +14,7 @@ pretrain:
     T_mult: 2
   grad_clip: 1
 train:
-  epoch: 5
+  epoch: 10
   opt_class: Adam
   scheduler_class: CosineAnnealingWarmRestarts
   scheduler_params:
@@ -47,10 +47,10 @@ model:
   params:
     emb_dim: 256
     encoder:
-      layer_number: 6
+      layer_number: 3
       nhead: 8
     decoder:
-      layer_number: 6
+      layer_number: 3
       nhead: 8
 #    hid_dim: &hid_dim 256
 #    n_layers: &n_layers 2

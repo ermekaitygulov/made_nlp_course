@@ -43,30 +43,60 @@ class Transformer(BaseModel):
             'trg_key_padding_mask': trg_pad_mask.transpose(0, 1)
         }
 
-        batch_size = trg.shape[1]
         max_len = trg.shape[0]
-        trg_vocab_size = self.output_dim
 
         src_emb = self.enc_embedding(src)
         src_emb = self.pos_encoding(src_emb)
-        trg_emb = self.dec_embedding(trg)
-        trg_emb = self.pos_encoding(trg_emb)
 
         memory = self.encoder(
             src_emb,
             src_key_padding_mask=trns_kwargs['src_key_padding_mask'],
         )
+        if self.training:
+            trg_emb = self.dec_embedding(trg)
+            trg_emb = self.pos_encoding(trg_emb)
+            tgt_mask = self.generate_square_subsequent_mask(max_len).to(self.device)
+            dec_out = self.decoder(trg_emb, memory,
+                                   tgt_mask=tgt_mask,
+                                   tgt_key_padding_mask=trns_kwargs['trg_key_padding_mask'],
+                                   memory_key_padding_mask=trns_kwargs['memory_key_padding_mask']
+                                   )
+            outputs = self.out(dec_out)
+        else:
+            outputs = self.generate_seq(trg, memory, trns_kwargs)
+        return outputs
+
+    def generate_seq(self, trg, memory, trns_kwargs):
+        max_len = trg.shape[0]
+        batch_size = trg.shape[1]
+        trg_vocab_size = self.output_dim
         outputs = torch.zeros(max_len, batch_size, trg_vocab_size).to(self.device)
-        dec_input = trg_emb[:1]
+        dec_input = torch.zeros(max_len, batch_size).long().to(self.device)
+        dec_input[0] = trg[0]
+        tgt_mask = self.generate_square_subsequent_mask(max_len).to(self.device)
         for i in range(1, max_len):
-            dec_out = self.decoder(dec_input, memory,
-                                   tgt_key_padding_mask=trns_kwargs['trg_key_padding_mask'][:, :i],
-                                   # memory_key_padding_mask=trns_kwargs['memory_key_padding_mask']
+            trg_emb = self.dec_embedding(dec_input)
+            trg_emb = self.pos_encoding(trg_emb)
+            dec_out = self.decoder(trg_emb, memory,
+                                   tgt_mask=tgt_mask,
+                                   tgt_key_padding_mask=trns_kwargs['trg_key_padding_mask'],
+                                   memory_key_padding_mask=trns_kwargs['memory_key_padding_mask']
                                    )
             out = self.out(dec_out)
-            outputs[i] = out[-1]
-            dec_input = trg_emb[:i + 1]
+            outputs[i] = out[i]
+            top1 = out[i].max(-1)[1]
+            dec_input[i] = top1
         return outputs
+
+    @staticmethod
+    def generate_square_subsequent_mask(sz: int):
+        r"""Generate a square mask for the sequence. The masked positions are filled with float('-inf').
+            Unmasked positions are filled with float(0.0).
+        """
+        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        return mask
+
 
 
 class PositionalEncoding(nn.Module):

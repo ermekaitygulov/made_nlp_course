@@ -14,7 +14,7 @@ pretrain:
     T_mult: 2
   grad_clip: 1
 train:
-  epoch: 0
+  epoch: 10
   opt_class: Adam
   scheduler_class: CosineAnnealingWarmRestarts
   scheduler_params:
@@ -26,7 +26,7 @@ train:
     ratio_growth: 0.1
     ratio_max: 0.5
 sgd_train:
-  epoch: 5
+  epoch: 0
   opt_class: SGD
   opt_params:
     lr: 0.0001
@@ -41,20 +41,20 @@ sgd_train:
     ratio_start: 0.5
     ratio_growth: 0.1
     ratio_max: 0.8
-model_path: 'main_stage-model.pt'
+#model_path: 'model_save/pretrain_baseline_hdzc17iz/main_stage-model.pt'
 model:
-  name: lstm_dec_attn
+  name: lstm_teacher
   params:
     hid_dim: &hid_dim 256
     n_layers: &n_layers 2
     teacher_forcing_ratio: 0
     encoder:
-      emb_dim: 256
+      emb_dim: 512
       dropout: 0.5
       hid_dim: *hid_dim
       n_layers: *n_layers
     decoder:
-      emb_dim: 256
+      emb_dim: 512
       dropout: 0.5
       hid_dim: *hid_dim
       n_layers: *n_layers

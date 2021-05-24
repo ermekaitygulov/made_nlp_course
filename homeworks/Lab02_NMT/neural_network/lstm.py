@@ -346,3 +346,48 @@ class Seq2Seq(BaseModel):
             dec_input = (top1 if teacher_force else trg[t])
 
         return outputs
+
+
+@add_to_catalog('lstm_teacher', NN_CATALOG)
+class Seq2Seq(BaseModel):
+    def __init__(self, input_dim, output_dim, device, pad_idx, **kwargs):
+        super().__init__(input_dim, output_dim, device, pad_idx, **kwargs)
+
+        self.encoder = Encoder(input_dim, **kwargs['encoder'])
+        self.decoder = AttnDecoder(output_dim, **kwargs['decoder'])
+        assert self.encoder.hid_dim == self.decoder.hid_dim, \
+            "Hidden dimensions of encoder and decoder must be equal!"
+        assert self.encoder.n_layers == self.decoder.n_layers, \
+            "Encoder and decoder must have equal number of layers!"
+
+    def forward(self, src, trg, teacher_forcing_ratio=0.):
+        # src = [src sent len, batch size]
+        # trg = [trg sent len, batch size]
+        # teacher_forcing_ratio is probability to use teacher forcing
+        # e.g. if teacher_forcing_ratio is 0.75 we use ground-truth inputs 75% of the time
+
+        # Again, now batch is the first dimension instead of zero
+        batch_size = trg.shape[1]
+        max_len = trg.shape[0]
+        teacher_start = max_len - int(max_len * teacher_forcing_ratio)
+        trg_vocab_size = self.decoder.output_dim
+
+        # tensor to store decoder outputs
+        outputs = torch.zeros(max_len, batch_size, trg_vocab_size).to(self.device)
+
+        # last hidden state of the encoder is used as the initial hidden state of the decoder
+        enc_output = self.encoder(src)
+        enc_outputs, hidden, cell = enc_output['rnn_out'], enc_output['rnn_hidden'], enc_output['rnn_cell']
+
+        # first input to the decoder is the <sos> tokens
+        dec_input = trg[0, :]
+
+        for t in range(1, max_len):
+            dec_output = self.decoder(dec_input, hidden, cell, enc_outputs)
+            output, hidden, cell = dec_output['prediction'], dec_output['rnn_hidden'], dec_output['rnn_cell']
+            outputs[t] = output
+            teacher_force = t > teacher_start
+            top1 = output.max(1)[1]
+            dec_input = (top1 if teacher_force else trg[t])
+
+        return outputs
