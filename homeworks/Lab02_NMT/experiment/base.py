@@ -94,7 +94,8 @@ class Experiment(ABC):
 
         input_dim = len(self.source.vocab)
         output_dim = len(self.target.vocab)
-        model = model_class(input_dim, output_dim, self.device, **model_config['params'])
+        pad_idx = self.target.vocab.stoi['<pad>']
+        model = model_class(input_dim, output_dim, self.device, pad_idx, **model_config['params'])
         if 'model_path' in self.config:
             model.load(self.config['model_path'])
         model.to(self.device)

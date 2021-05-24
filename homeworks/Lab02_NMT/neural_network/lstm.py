@@ -259,8 +259,8 @@ class Seq2Seq(BaseModel):
 
 @add_to_catalog('lstm_attn', NN_CATALOG)
 class Seq2Seq(BaseModel):
-    def __init__(self, input_dim, output_dim, device, **kwargs):
-        super().__init__(input_dim, output_dim, device, **kwargs)
+    def __init__(self, input_dim, output_dim, device, pad_idx, **kwargs):
+        super().__init__(input_dim, output_dim, device, pad_idx, **kwargs)
 
         self.encoder = Encoder(input_dim, **kwargs['encoder'])
         self.attention = Attention(**kwargs['attention'])
@@ -306,8 +306,8 @@ class Seq2Seq(BaseModel):
 
 @add_to_catalog('lstm_dec_attn', NN_CATALOG)
 class Seq2Seq(BaseModel):
-    def __init__(self, input_dim, output_dim, device, **kwargs):
-        super().__init__(input_dim, output_dim, device, **kwargs)
+    def __init__(self, input_dim, output_dim, device, pad_idx, **kwargs):
+        super().__init__(input_dim, output_dim, device, pad_idx, **kwargs)
 
         self.encoder = Encoder(input_dim, **kwargs['encoder'])
         self.decoder = AttnDecoder(output_dim, **kwargs['decoder'])

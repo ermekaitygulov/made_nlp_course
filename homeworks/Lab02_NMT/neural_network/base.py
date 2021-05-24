@@ -5,12 +5,13 @@ from torch.nn import Module
 
 
 class BaseModel(Module):
-    def __init__(self, input_dim, output_dim, device, **kwargs):
+    def __init__(self, input_dim, output_dim, device, pad_idx, **kwargs):
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.kwargs = kwargs
         self.device = device
+        self.pad_idx = pad_idx
 
     def load(self, path):
         with open(path, "rb") as fp:
