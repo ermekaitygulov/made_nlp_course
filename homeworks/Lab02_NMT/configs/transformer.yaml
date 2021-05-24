@@ -14,7 +14,7 @@ pretrain:
     T_mult: 2
   grad_clip: 1
 train:
-  epoch: 10
+  epoch: 0
   opt_class: Adam
   scheduler_class: CosineAnnealingWarmRestarts
   scheduler_params:
@@ -24,7 +24,7 @@ train:
   teacher_enforce:
     ratio_start: 0.0
     ratio_growth: 0.1
-    ratio_max: 0.5
+    ratio_max: 0.7
 sgd_train:
   epoch: 0
   opt_class: SGD
@@ -41,17 +41,19 @@ sgd_train:
     ratio_start: 0.5
     ratio_growth: 0.1
     ratio_max: 0.8
-#model_path: 'model_save/pretrain_baseline_hdzc17iz/main_stage-model.pt'
+model_path: 'model_save/pretrain_baseline_ogo7yye5/main_stage-model.pt'
 model:
-  name: transformer
+  name: hybrid
   params:
-    emb_dim: 256
+    emb_dim: &emb_dim 512
     encoder:
       layer_number: 3
       nhead: 8
     decoder:
-      layer_number: 3
-      nhead: 8
+      emb_dim: *emb_dim
+      dropout: 0.5
+      hid_dim: *emb_dim
+      n_layers: 1
 #    hid_dim: &hid_dim 256
 #    n_layers: &n_layers 2
 #    teacher_forcing_ratio: 0
