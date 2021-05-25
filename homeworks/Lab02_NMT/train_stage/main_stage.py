@@ -118,7 +118,7 @@ class MainStage:
                     log_dict['val_step'] = global_step
                     if wandb.run:
                         wandb.log({self.name: log_dict})
-                    tqdm_iterator.set_postfix(train_loss=mean_loss)
+                    tqdm_iterator.set_postfix(val_loss=mean_loss)
 
                 global_step += 1
 

@@ -1,7 +1,9 @@
+import os
 import random
 import time
 from abc import ABC, abstractmethod
 from typing import Type, Dict
+import yaml
 
 import torch
 import wandb
@@ -9,6 +11,7 @@ from nltk import WordPunctTokenizer
 from nltk.translate.bleu_score import corpus_bleu
 from torchtext.data import Field, TabularDataset, BucketIterator
 from tqdm import tqdm
+import numpy as np
 
 from utils import Task, get_text
 from neural_network import NN_CATALOG
@@ -25,6 +28,7 @@ class Experiment(ABC):
         self.task = Task(*self.read_data())
         self.model = self.init_model()
         self.trainer = self.init_trainer()
+        self.stats = dict()
         self.time = None
 
     def train(self):
@@ -33,6 +37,7 @@ class Experiment(ABC):
         self.trainer.train(train_iterator, val_iterator)
         end_time = time.time()
         self.time = end_time - start_time
+        self.save_model()
 
     def test(self):
         _, _, test_iterator = self.task
@@ -40,9 +45,12 @@ class Experiment(ABC):
 
         original_text = []
         generated_text = []
+        inference_speed = []
         self.model.eval()
+        tqdm_iterator = tqdm(enumerate(test_iterator))
+
         with torch.no_grad():
-            for i, batch in tqdm(enumerate(test_iterator)):
+            for i, batch in tqdm_iterator:
                 src = batch.src
                 trg = batch.trg
 
@@ -53,16 +61,19 @@ class Experiment(ABC):
 
                 original_text.extend([get_text(x, vocab) for x in trg.cpu().numpy().T])
                 generated_text.extend([get_text(x, vocab) for x in output])
+                if tqdm_iterator._ema_dt():
+                    inference_speed.append(tqdm_iterator._ema_dn() / tqdm_iterator._ema_dt())
 
         bleu = corpus_bleu([[text] for text in original_text], generated_text) * 100
         print(f'Bleu: {bleu:.3f}')
-        table = wandb.Table(data=[[self.time // 60, bleu]], columns=["time_spent (min)", "bleu"])
-        if wandb.run:
-            wandb.log({"bleu_score": wandb.plot.scatter(
-                table,
-                "time_spent (min)",
-                "bleu", title="BLEU score")
-            })
+
+        self.stats['bleu'] = bleu
+        self.stats['time_spent (min)'] = self.time // 60
+        self.stats['time_spent (sec)'] = self.time
+        self.stats['inference_speed'] = np.mean(inference_speed)
+        self.wandb_log_stats()
+        self.save_stats()
+        self.save_config(f'{int(bleu)}_bleu.yaml')
 
     def read_data(self):
         data_config = self.config['data']
@@ -109,6 +120,48 @@ class Experiment(ABC):
                       eos_token='<eos>',
                       lower=True)
         return field
+
+    def wandb_log_stats(self):
+        if not wandb.run:
+            return
+        data = []
+        columns = []
+        for key, value in self.stats.items():
+            data.append(value)
+            columns.append(key)
+        table = wandb.Table(
+            data=[data],
+            columns=columns
+        )
+        wandb.log({"bleu_score": wandb.plot.scatter(
+            table,
+            "time_spent (min)",
+            "bleu", title="BLEU score")
+        })
+
+    def save_stats(self):
+        save_path = './'
+        if wandb.run:
+            save_path = os.path.join('model_save', wandb.run.name)
+            os.makedirs(save_path, exist_ok=True)
+        with open(os.path.join(save_path, 'stats.yaml'), 'w') as fout:
+            yaml.dump(self.stats, fout)
+
+    def save_config(self, config_name):
+        save_path = './'
+        if wandb.run:
+            save_path = os.path.join('model_save', wandb.run.name)
+            os.makedirs(save_path, exist_ok=True)
+        with open(os.path.join(save_path, config_name), 'w') as fout:
+            yaml.dump(self.config, fout)
+
+    def save_model(self):
+        if wandb.run:
+            save_path = os.path.join('model_save', wandb.run.name)
+            os.makedirs(save_path, exist_ok=True)
+            torch.save(self.model.state_dict(), os.path.join(save_path, 'final-model.pt'))
+        else:
+            torch.save(self.model.state_dict(), 'final-model.pt')
 
     def tokenize(self, x):
         token_collection = self.tokenizer.tokenize(x.lower())
