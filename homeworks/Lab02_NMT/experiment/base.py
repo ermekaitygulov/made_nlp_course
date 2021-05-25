@@ -66,11 +66,10 @@ class Experiment(ABC):
 
         bleu = corpus_bleu([[text] for text in original_text], generated_text) * 100
         print(f'Bleu: {bleu:.3f}')
-
         self.stats['bleu'] = bleu
         self.stats['time_spent (min)'] = self.time // 60
         self.stats['time_spent (sec)'] = self.time
-        self.stats['inference_speed'] = np.mean(inference_speed)
+        self.stats['inference_speed (it/seq)'] = float(np.mean(inference_speed))
         self.wandb_log_stats()
         self.save_stats()
         self.save_config(f'{int(bleu)}_bleu.yaml')
