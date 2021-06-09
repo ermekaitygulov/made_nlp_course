@@ -11,7 +11,7 @@ class BaseModel(Module):
         self.output_dim = output_dim
         self.kwargs = kwargs
         self.device = device
-
+        self.trg_vocab = trg_vocab
         self.pad_idx = trg_vocab.stoi['<pad>']
         self.sos_idx = trg_vocab.stoi['<sos>']
         self.eos_idx = trg_vocab.stoi['<eos>']

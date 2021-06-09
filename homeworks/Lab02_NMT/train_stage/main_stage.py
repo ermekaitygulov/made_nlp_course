@@ -5,9 +5,12 @@ import os
 import numpy as np
 import torch
 import wandb
+from nltk.translate.bleu_score import corpus_bleu
 from torch import optim
 from torch import nn
 from tqdm import tqdm
+
+from utils import get_text
 
 
 class MainStage:
@@ -105,9 +108,15 @@ class MainStage:
         loss_window = deque(maxlen=self.config['log_window_size'])
         tqdm_iterator = tqdm(iterator)
 
+        original_text = []
+        generated_text = []
         with torch.no_grad():
             for i, batch in enumerate(tqdm_iterator):
                 loss = self.compute_batch_loss(batch)
+                org, gen = self.gen_translate(batch)
+                original_text.extend(org)
+                generated_text.extend(gen)
+
                 epoch_loss += loss.item()
                 loss_window.append(loss.item())
 
@@ -121,21 +130,23 @@ class MainStage:
                     tqdm_iterator.set_postfix(val_loss=mean_loss)
 
                 global_step += 1
-
+        bleu = corpus_bleu([[text] for text in original_text], generated_text) * 100
+        wandb.log({self.name: {'bleu': bleu}})
+        print(f'Bleu: {bleu:.3f}')
         return epoch_loss / len(iterator), global_step
 
     def compute_batch_loss(self, batch, val=False):
         src = batch.src
         trg = batch.trg
         if val:
-            output = self.model(src, trg, 1.)
+            output = self.model(src, trg[:-1], 1.)
         else:
-            output = self.model(src, trg, self.teacher_enforce_ratio)
+            output = self.model(src, trg[:-1], self.teacher_enforce_ratio)
 
         # trg = [trg sent len, batch size]
         # output = [trg sent len, batch size, output dim]
 
-        output = output[1:].view(-1, output.shape[-1])
+        output = output.view(-1, output.shape[-1])
         trg = trg[1:].view(-1)
 
         # trg = [(trg sent len - 1) * batch size]
@@ -143,6 +154,18 @@ class MainStage:
 
         loss = self.criterion(output, trg)
         return loss
+
+    def gen_translate(self, batch):
+        src = batch.src
+        trg = batch.trg
+        output = self.model.gen_translate(src, trg[:-1])
+        # trg = [trg sent len, batch size]
+        # output = [trg sent len, batch size, output dim]
+        vocab = self.model.trg_vocab
+
+        org = [get_text(x, vocab) for x in trg.cpu().numpy().T]
+        gen = [get_text(x, vocab) for x in output]
+        return org, gen
 
     def increase_teacher_ratio(self):
         growth = self.config['teacher_enforce']['ratio_growth']

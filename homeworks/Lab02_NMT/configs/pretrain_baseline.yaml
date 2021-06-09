@@ -14,7 +14,7 @@ pretrain:
     T_mult: 2
   grad_clip: 1
 train:
-  epoch: 20
+  epoch: 15
   opt_class: Adam
   scheduler_class: CosineAnnealingWarmRestarts
   scheduler_params:
@@ -24,7 +24,7 @@ train:
   teacher_enforce:
     ratio_start: 0.0
     ratio_growth: 0.1
-    ratio_max: 0.9
+    ratio_max: 0.7
 sgd_train:
   epoch: 0
   opt_class: SGD

@@ -1,7 +1,7 @@
 data:
-  train_size: 0.8
-  val_size: 0.15
-  test_size: 0.05
+  train_size: 0.5
+  val_size: 0.4
+  test_size: 0.1
   batch_size: 64
   path: '../../datasets/Machine_translation_EN_RU/data.txt'
   word_min_freq: 5
@@ -14,7 +14,7 @@ pretrain:
     T_mult: 2
   grad_clip: 1
 train:
-  epoch: 0
+  epoch: 10
   opt_class: Adam
   scheduler_class: CosineAnnealingWarmRestarts
   scheduler_params:
@@ -24,7 +24,7 @@ train:
   teacher_enforce:
     ratio_start: 0.0
     ratio_growth: 0.1
-    ratio_max: 0.7
+    ratio_max: 0.0
 sgd_train:
   epoch: 0
   opt_class: SGD
@@ -41,19 +41,23 @@ sgd_train:
     ratio_start: 0.5
     ratio_growth: 0.1
     ratio_max: 0.8
-model_path: 'model_save/pretrain_baseline_ogo7yye5/main_stage-model.pt'
+#model_path: 'model_save/pretrain_baseline_ogo7yye5/main_stage-model.pt'
 model:
-  name: hybrid
+  name: transformer
   params:
-    emb_dim: &emb_dim 512
+    emb_dim: 512
     encoder:
-      layer_number: 3
+      layer_number: 2
+      dim_feedforward: 1024
+      dropout: 0.1
       nhead: 8
     decoder:
-      emb_dim: *emb_dim
-      dropout: 0.5
-      hid_dim: *emb_dim
-      n_layers: 1
+      layer_number: 2
+      dim_feedforward: 1024
+      dropout: 0.1
+      nhead: 8
+    pos_encoder:
+      dropout: 0.1
 #    hid_dim: &hid_dim 256
 #    n_layers: &n_layers 2
 #    teacher_forcing_ratio: 0
