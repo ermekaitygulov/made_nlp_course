@@ -1,10 +1,12 @@
 import math
+import random
 
 import torch
 import torch.nn as nn
 
 from neural_network import NN_CATALOG, BaseModel
 from utils import add_to_catalog
+import numpy as np
 
 
 @add_to_catalog('transformer', NN_CATALOG)
@@ -51,7 +53,12 @@ class Transformer(BaseModel):
         )
 
         if self.training:
-            trg_emb = self.dec_embedding(trg)
+            if teacher_forcing_ratio:
+                rand_trg = self.randomize_trg(trg, trg_pad_mask, teacher_forcing_ratio)
+                trg_emb = self.dec_embedding(rand_trg)
+            else:
+                trg_emb = self.dec_embedding(trg)
+
             trg_emb = self.pos_encoding(trg_emb * self.emb_dim**0.5)
             tgt_mask = self.generate_square_subsequent_mask(trg.shape[0]).to(self.device)
             dec_out = self.decoder(trg_emb, memory,
@@ -60,11 +67,23 @@ class Transformer(BaseModel):
                                    memory_key_padding_mask=trns_kwargs['memory_key_padding_mask']
                                    )
             outputs = self.out(dec_out)
-            if teacher_forcing_ratio:
-                raise NotImplementedError
         else:
             outputs = self.generate_seq(trg, memory, trns_kwargs)
         return outputs
+
+    def randomize_trg(self, trg, trg_pad_mask, teacher_forcing_ratio=0.1):
+        maxlen = trg.shape[0]
+        batch_size = trg.shape[1]
+
+        rand_n = int(trg.shape[0] * teacher_forcing_ratio)
+        rand_idx = random.sample(range(maxlen), rand_n)
+        rand_trg = trg.clone()
+        for i in rand_idx:
+            rand_token = torch.randint(self.output_dim, (batch_size,)).to(self.device)
+            pad_mask = trg_pad_mask[i]
+            rand_token = rand_token.masked_fill(pad_mask, self.pad_idx)
+            rand_trg[i] = rand_token
+        return rand_trg
 
     def generate_seq(self, trg, memory, trns_kwargs, start_idx=1):
         max_len = trg.shape[0]
@@ -97,8 +116,6 @@ class Transformer(BaseModel):
             Unmasked positions are filled with float(0.0).
         """
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        # mask = torch.zeros(sz, sz)
-        # mask[:, 0] = 1
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
         return mask
 

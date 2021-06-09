@@ -131,7 +131,8 @@ class MainStage:
 
                 global_step += 1
         bleu = corpus_bleu([[text] for text in original_text], generated_text) * 100
-        wandb.log({self.name: {'bleu': bleu}})
+        if wandb.run:
+            wandb.log({self.name: {'bleu': bleu}})
         print(f'Bleu: {bleu:.3f}')
         return epoch_loss / len(iterator), global_step
 
