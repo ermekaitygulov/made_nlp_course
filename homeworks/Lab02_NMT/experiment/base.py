@@ -41,7 +41,6 @@ class Experiment(ABC):
 
     def test(self):
         _, _, test_iterator = self.task
-        vocab = self.target.vocab
 
         original_text = []
         generated_text = []
@@ -58,9 +57,8 @@ class Experiment(ABC):
 
                 # trg = [trg sent len, batch size]
                 # output = [trg sent len, batch size, output dim]
-
-                original_text.extend([get_text(x, vocab) for x in trg.cpu().numpy().T])
-                generated_text.extend([get_text(x, vocab) for x in output])
+                original_text.extend([self.decode_translation(x) for x in trg.cpu().numpy().T])
+                generated_text.extend([self.decode_translation(x) for x in output])
                 if tqdm_iterator._ema_dt():
                     inference_speed.append(tqdm_iterator._ema_dn() / tqdm_iterator._ema_dt())
 
@@ -165,6 +163,10 @@ class Experiment(ABC):
     def tokenize(self, x):
         token_collection = self.tokenizer.tokenize(x.lower())
         return token_collection
+
+    def decode_translation(self, idx_text):
+        vocab = self.target.vocab
+        return get_text(idx_text, vocab)
 
     @staticmethod
     def _len_sort_key(x):

@@ -34,6 +34,7 @@ class Transformer(BaseModel):
         self.decoder = nn.TransformerDecoder(decoder_layer, dec_layer_n, decoder_norm)
         self.emb_dim = emb_dim
         self.out = nn.Linear(emb_dim, output_dim)
+        self.teacher_forcing_prob = kwargs['teacher_forcing_prob']
 
     def forward(self, src, trg, teacher_forcing_ratio=0.):
         src_pad_mask = torch.eq(src, self.pad_idx)
@@ -53,7 +54,7 @@ class Transformer(BaseModel):
         )
 
         if self.training:
-            if teacher_forcing_ratio:
+            if teacher_forcing_ratio and random.random() < self.teacher_forcing_prob:
                 rand_trg = self.randomize_trg(trg, trg_pad_mask, teacher_forcing_ratio)
                 trg_emb = self.dec_embedding(rand_trg)
             else:
@@ -76,7 +77,7 @@ class Transformer(BaseModel):
         batch_size = trg.shape[1]
 
         rand_n = int(trg.shape[0] * teacher_forcing_ratio)
-        rand_idx = random.sample(range(maxlen), rand_n)
+        rand_idx = random.sample(range(1, maxlen), rand_n)
         rand_trg = trg.clone()
         for i in rand_idx:
             rand_token = torch.randint(self.output_dim, (batch_size,)).to(self.device)
