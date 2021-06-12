@@ -27,7 +27,7 @@ train:
   teacher_enforce:
     ratio_start: 0.0
     ratio_growth: 0.1
-    ratio_max: 0.0
+    ratio_max: 0.3
 sgd_train:
   epoch: 0
   opt_class: SGD
@@ -49,17 +49,17 @@ model:
   name: transformer
   params:
     teacher_forcing_prob: 0.5
-    emb_dim: 512
+    emb_dim: 256
     encoder:
-      layer_number: 3
-      dim_feedforward: 1024
+      layer_number: 4
+      dim_feedforward: 256
       dropout: 0.2
-      nhead: 8
+      nhead: 4
     decoder:
-      layer_number: 3
-      dim_feedforward: 1024
+      layer_number: 4
+      dim_feedforward: 256
       dropout: 0.2
-      nhead: 8
+      nhead: 4
     pos_encoder:
       dropout: 0.1
 #    hid_dim: &hid_dim 256

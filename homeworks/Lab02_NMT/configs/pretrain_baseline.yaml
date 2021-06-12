@@ -10,23 +10,25 @@ data:
 pretrain:
   epoch: 5
   opt_class: Adam
-  scheduler_class: CosineAnnealingWarmRestarts
+  scheduler_class: OneCycleLR
   scheduler_params:
-    T_0: 625
-    T_mult: 2
+    max_lr: 0.001
+    steps_per_epoch: 625
+    epochs: 5
   grad_clip: 1
 train:
   epoch: 15
   opt_class: Adam
-  scheduler_class: CosineAnnealingWarmRestarts
+  scheduler_class: OneCycleLR
   scheduler_params:
-    T_0: 625
-    T_mult: 2
+    max_lr: 0.001
+    steps_per_epoch: 625
+    epochs: 15
   grad_clip: 1
   teacher_enforce:
     ratio_start: 0.0
     ratio_growth: 0.1
-    ratio_max: 0.7
+    ratio_max: 0.5
 sgd_train:
   epoch: 0
   opt_class: SGD
@@ -52,11 +54,11 @@ model:
     teacher_forcing_ratio: 0
     encoder:
       emb_dim: 512
-      dropout: 0.5
+      dropout: 0.2
       hid_dim: *hid_dim
       n_layers: *n_layers
     decoder:
       emb_dim: 512
-      dropout: 0.5
+      dropout: 0.2
       hid_dim: *hid_dim
       n_layers: *n_layers
