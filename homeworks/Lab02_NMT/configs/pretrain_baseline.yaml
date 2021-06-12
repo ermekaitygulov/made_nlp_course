@@ -1,3 +1,5 @@
+src_bpe: 'configs/ru_bpe_2000'
+trg_bpe: 'configs/en_bpe_2000'
 data:
   train_size: 0.8
   val_size: 0.15
@@ -41,7 +43,7 @@ sgd_train:
     ratio_start: 0.5
     ratio_growth: 0.1
     ratio_max: 0.8
-#model_path: 'model_save/pretrain_baseline_7lc775do/main_stage-model.pt'
+#model_path: 'main_stage-model.pt'
 model:
   name: lstm_teacher
   params:

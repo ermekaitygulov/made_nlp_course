@@ -383,15 +383,14 @@ class LSTMTeacher(BaseModel):
         enc_outputs, hidden, cell = enc_output['rnn_out'], enc_output['rnn_hidden'], enc_output['rnn_cell']
 
         # first input to the decoder is the <sos> tokens
-        dec_input = trg[0, :]
-        for t in range(1, max_len):
+        top1 = None
+        for t in range(max_len):
+            teacher_force = t > teacher_start and top1 is not None
+            dec_input = top1 if teacher_force else trg[t]
             dec_output = self.decoder(dec_input, hidden, cell, enc_outputs)
             output, hidden, cell = dec_output['prediction'], dec_output['rnn_hidden'], dec_output['rnn_cell']
             outputs[t] = output
-            teacher_force = t > teacher_start
             top1 = output.max(1)[1]
-            dec_input = (top1 if teacher_force else trg[t])
-
         return outputs
 
     # def gen_translate(self, src, trg):

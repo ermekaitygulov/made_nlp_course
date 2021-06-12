@@ -1,9 +1,9 @@
-src_bpe: 'configs/ru_bpe'
-trg_bpe: 'configs/en_bpe'
+src_bpe: 'configs/ru_bpe_2000'
+trg_bpe: 'configs/en_bpe_2000'
 data:
-  train_size: 0.5
-  val_size: 0.4
-  test_size: 0.1
+  train_size: 0.8
+  val_size: 0.15
+  test_size: 0.05
   batch_size: 64
   path: '../../datasets/Machine_translation_EN_RU/data.txt'
   word_min_freq: 5
@@ -18,15 +18,16 @@ pretrain:
 train:
   epoch: 15
   opt_class: Adam
-  scheduler_class: CosineAnnealingWarmRestarts
+  scheduler_class: OneCycleLR
   scheduler_params:
-    T_0: 625
-    T_mult: 2
+    max_lr: 0.001
+    steps_per_epoch: 625
+    epochs: 15
   grad_clip: 1
   teacher_enforce:
     ratio_start: 0.0
     ratio_growth: 0.1
-    ratio_max: 0.5
+    ratio_max: 0.0
 sgd_train:
   epoch: 0
   opt_class: SGD
@@ -48,7 +49,7 @@ model:
   name: transformer
   params:
     teacher_forcing_prob: 0.5
-    emb_dim: 256
+    emb_dim: 512
     encoder:
       layer_number: 3
       dim_feedforward: 1024
