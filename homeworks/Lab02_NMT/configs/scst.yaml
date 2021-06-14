@@ -6,7 +6,7 @@ data:
   path: '../../datasets/Machine_translation_EN_RU/data.txt'
   word_min_freq: 5
 pretrain:
-  epoch: 0
+  epoch: 5
   opt_class: Adam
   scheduler_class: OneCycleLR
   scheduler_params:
@@ -15,7 +15,7 @@ pretrain:
     epochs: 5
   grad_clip: 1
 train:
-  epoch: 0
+  epoch: 15
   opt_class: Adam
   scheduler_class: OneCycleLR
   scheduler_params:
