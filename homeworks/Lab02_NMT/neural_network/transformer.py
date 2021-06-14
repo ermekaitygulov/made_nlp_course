@@ -6,7 +6,6 @@ import torch.nn as nn
 
 from neural_network import NN_CATALOG, BaseModel
 from utils import add_to_catalog
-import numpy as np
 
 
 @add_to_catalog('transformer', NN_CATALOG)
@@ -36,7 +35,7 @@ class Transformer(BaseModel):
         self.out = nn.Linear(emb_dim, output_dim)
         self.teacher_forcing_prob = kwargs['teacher_forcing_prob']
 
-    def forward(self, src, trg, teacher_forcing_ratio=0.):
+    def forward(self, src, trg, teacher_forcing_ratio=0., greedy=True):
         src_pad_mask = torch.eq(src, self.pad_idx)
         trg_pad_mask = torch.eq(trg, self.pad_idx)
         trns_kwargs = {
@@ -52,7 +51,7 @@ class Transformer(BaseModel):
             src_emb,
             src_key_padding_mask=trns_kwargs['src_key_padding_mask'],
         )
-
+        seq = None
         if self.training:
             if teacher_forcing_ratio and random.random() < self.teacher_forcing_prob:
                 rand_trg = self.randomize_trg(trg, trg_pad_mask, teacher_forcing_ratio)
@@ -69,8 +68,8 @@ class Transformer(BaseModel):
                                    )
             outputs = self.out(dec_out)
         else:
-            outputs = self.generate_seq(trg, memory, trns_kwargs)
-        return outputs
+            outputs, seq = self.generate_seq(trg, memory, trns_kwargs)
+        return outputs, seq
 
     def randomize_trg(self, trg, trg_pad_mask, teacher_forcing_ratio=0.1):
         maxlen = trg.shape[0]
@@ -89,6 +88,7 @@ class Transformer(BaseModel):
     def generate_seq(self, trg, memory, trns_kwargs, start_idx=1):
         max_len = trg.shape[0]
         outputs = []
+        seq = []
 
         dec_input = trg[:start_idx]
         trg_emb = self.dec_embedding(dec_input)
@@ -105,11 +105,13 @@ class Transformer(BaseModel):
             out = self.out(dec_out)
             outputs.append(out[-1])
             top1 = out[-1].max(-1)[1]
+            seq.append(top1)
             top1 = top1.unsqueeze(0)
             top1_emb = self.dec_embedding(top1)
             trg_emb = torch.cat([trg_emb, top1_emb])
         outputs = torch.stack(outputs)
-        return outputs
+        seq = torch.stack(seq)
+        return outputs, seq
 
     @staticmethod
     def generate_square_subsequent_mask(sz: int):
