@@ -1,5 +1,4 @@
 import os
-from collections import deque
 
 import torch
 import wandb
@@ -41,7 +40,7 @@ class SCSTStage(MainStage):
                     torch.save(self.model.state_dict(), os.path.join(save_path, f'{self.name}-model.pt'))
                 else:
                     torch.save(self.model.state_dict(), f'{self.name}-model.pt')
-                best_val_bleu = val_loss
+                best_val_bleu = val_bleu
 
             print(f'Epoch: {epoch + 1:02}')
             print(f'\tVal BLEU: {val_bleu:.3f}')
