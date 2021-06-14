@@ -17,7 +17,7 @@ class PretrainStage(MainStage):
 
         with torch.no_grad():
             for i, batch in enumerate(tqdm_iterator):
-                loss = self.compute_batch_loss(batch)
+                loss = self.compute_batch_loss(batch)['loss']
 
                 epoch_loss += loss.item()
                 loss_window.append(loss.item())
@@ -32,7 +32,7 @@ class PretrainStage(MainStage):
                     tqdm_iterator.set_postfix(val_loss=mean_loss)
 
                 global_step += 1
-        return epoch_loss / len(iterator), global_step
+        return 0., epoch_loss / len(iterator), global_step
 
     def compute_batch_loss(self, batch, val=False):
         src = batch.src
@@ -49,4 +49,4 @@ class PretrainStage(MainStage):
         # output = [(trg sent len - 1) * batch size, output dim]
 
         loss = self.criterion(output, trg)
-        return loss
+        return {'loss': loss}

@@ -2,6 +2,7 @@ from typing import Dict, Type
 
 import torch
 from torch.nn import Module
+import torch.nn.functional as F
 
 
 class BaseModel(Module):
@@ -16,15 +17,15 @@ class BaseModel(Module):
         self.sos_idx = trg_vocab.stoi['<sos>']
         self.eos_idx = trg_vocab.stoi['<eos>']
 
+    def gen_translate(self, src, trg, greedy=True):
+        output_logits, output_seq = self(src, trg, 1., greedy=greedy)
+        output_prob = F.log_softmax(output_logits, dim=-1)
+        return output_prob, output_seq
+
     def load(self, path):
         with open(path, "rb") as fp:
             state_dict = torch.load(fp, map_location='cpu')
             self.load_state_dict(state_dict)
-
-    def gen_translate(self, src, trg):
-        output = self(src, trg, 1.)
-        output = output.argmax(dim=-1)[1:].detach().cpu().numpy().T
-        return output
 
 
 NN_CATALOG: Dict[str, Type[BaseModel]] = {}

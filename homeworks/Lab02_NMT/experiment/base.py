@@ -53,12 +53,12 @@ class Experiment(ABC):
                 src = batch.src
                 trg = batch.trg
 
-                output = self.model.gen_translate(src, trg)
+                _, output = self.model.gen_translate(src, trg, greedy=True)
 
                 # trg = [trg sent len, batch size]
                 # output = [trg sent len, batch size, output dim]
                 original_text.extend([self.decode_translation(x) for x in trg.cpu().numpy().T])
-                generated_text.extend([self.decode_translation(x) for x in output])
+                generated_text.extend([self.decode_translation(x) for x in output.cpu().numpy().T])
                 if tqdm_iterator._ema_dt():
                     inference_speed.append(tqdm_iterator._ema_dn() / tqdm_iterator._ema_dt())
 

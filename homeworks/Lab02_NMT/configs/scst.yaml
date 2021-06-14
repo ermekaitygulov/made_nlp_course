@@ -1,9 +1,9 @@
 data:
   train_size: 0.8
-  val_size: 0.1
-  test_size: 0.1
+  val_size: 0.15
+  test_size: 0.05
   batch_size: 64
-  path: '../../week11_policy_gradient_scst/main_dataset.txt'
+  path: '../../datasets/Machine_translation_EN_RU/data.txt'
   word_min_freq: 5
 pretrain:
   epoch: 0
@@ -15,7 +15,7 @@ pretrain:
     epochs: 5
   grad_clip: 1
 train:
-  epoch: 1
+  epoch: 0
   opt_class: Adam
   scheduler_class: OneCycleLR
   scheduler_params:
@@ -27,23 +27,14 @@ train:
     ratio_start: 0.0
     ratio_growth: 0.1
     ratio_max: 0.5
-sgd_train:
-  epoch: 0
-  opt_class: SGD
+scst:
+  epoch: 5
+  opt_class: Adam
   opt_params:
     lr: 0.0001
-    momentum: 0.9
-    nesterov: True
-  scheduler_class: CosineAnnealingWarmRestarts
-  scheduler_params:
-    T_0: 2500
-    T_mult: 2
   grad_clip: 1
-  teacher_enforce:
-    ratio_start: 0.5
-    ratio_growth: 0.1
-    ratio_max: 0.8
-#model_path: 'main_stage-model.pt'
+  entropy_weight: 0.001
+model_path: model_save/pretrain_baseline_2jxtl023/final-model.pt
 model:
   name: lstm_teacher
   params:

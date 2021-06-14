@@ -38,42 +38,43 @@ class MainStage:
     def train(self, train_iterator, val_iterator):
         train_step = 0
         val_step = 0
-        best_valid_loss = float('inf')
+        best_val_bleu = 0.
         for epoch in range(self.config['epoch']):
             train_loss, train_step = self.train_epoch(
                 train_iterator,
                 train_step
             )
 
-            valid_loss, val_step = self.val_epoch(
+            val_bleu, val_loss, val_step = self.val_epoch(
                 val_iterator,
                 val_step,
             )
 
             self.increase_teacher_ratio()
-            if valid_loss < best_valid_loss:
+            if val_bleu > best_val_bleu:
                 if wandb.run:
                     save_path = os.path.join('model_save', wandb.run.name)
                     os.makedirs(save_path, exist_ok=True)
                     torch.save(self.model.state_dict(), os.path.join(save_path, f'{self.name}-model.pt'))
                 else:
                     torch.save(self.model.state_dict(), f'{self.name}-model.pt')
-                best_valid_loss = valid_loss
+                best_val_bleu = val_loss
 
             print(f'Epoch: {epoch + 1:02}')
             print(f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}')
-            print(f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+            print(f'\t Val. Loss: {val_loss:.3f} |  Val. PPL: {math.exp(val_loss):7.3f} |  BLEU: {val_bleu:.3f}')
 
     def train_epoch(self, iterator, global_step):
         self.model.train()
 
         epoch_loss = 0
-        loss_window = deque(maxlen=self.config['log_window_size'])
+        loss_window = None
         tqdm_iterator = tqdm(iterator)
         for i, batch in enumerate(tqdm_iterator):
             self.opt.zero_grad()
 
-            loss = self.compute_batch_loss(batch)
+            loss_dict = self.compute_batch_loss(batch)
+            loss = loss_dict['loss']
             loss.backward()
 
             # Let's clip the gradient
@@ -83,11 +84,12 @@ class MainStage:
                 self.lr_scheduler.step()
 
             epoch_loss += loss.item()
-            loss_window.append(loss.cpu().data.numpy())
+            loss_window = self.add_to_window(loss_dict, loss_window)
             if (i + 1) % self.config['log_window_size'] == 0:
                 log_dict = dict()
-                mean_loss = np.mean(loss_window)
-                log_dict['train_loss'] = mean_loss
+                for key, value in loss_window.items():
+                    mean_value = np.mean(value)
+                    log_dict[f'train_{key}'] = mean_value
                 log_dict['train_step'] = global_step
                 log_dict['learning_rate'] = self.opt.param_groups[0]["lr"]
                 log_dict['teacher_ratio'] = self.teacher_enforce_ratio
@@ -96,7 +98,7 @@ class MainStage:
                     log_dict['train_speed(batch/sec)'] = tqdm_iterator._ema_dn() / tqdm_iterator._ema_dt()
                 if wandb.run:
                     wandb.log({self.name: log_dict})
-                tqdm_iterator.set_postfix(train_loss=mean_loss)
+                tqdm_iterator.set_postfix(train_loss=log_dict['train_loss'])
 
             global_step += 1
 
@@ -112,7 +114,7 @@ class MainStage:
         generated_text = []
         with torch.no_grad():
             for i, batch in enumerate(tqdm_iterator):
-                loss = self.compute_batch_loss(batch)
+                loss = self.compute_batch_loss(batch)['loss']
                 org, gen = self.gen_translate(batch)
                 original_text.extend(org)
                 generated_text.extend(gen)
@@ -133,16 +135,15 @@ class MainStage:
         bleu = corpus_bleu([[text] for text in original_text], generated_text) * 100
         if wandb.run:
             wandb.log({self.name: {'bleu': bleu, 'val_step': global_step}})
-        print(f'Bleu: {bleu:.3f}')
-        return epoch_loss / len(iterator), global_step
+        return bleu, epoch_loss / len(iterator), global_step
 
     def compute_batch_loss(self, batch, val=False):
         src = batch.src
         trg = batch.trg
         if val:
-            output = self.model(src, trg[:-1], 1.)
+            output, _ = self.model(src, trg[:-1], 1.)
         else:
-            output = self.model(src, trg[:-1], self.teacher_enforce_ratio)
+            output, _ = self.model(src, trg[:-1], self.teacher_enforce_ratio)
 
         # trg = [trg sent len, batch size]
         # output = [trg sent len, batch size, output dim]
@@ -154,18 +155,16 @@ class MainStage:
         # output = [(trg sent len - 1) * batch size, output dim]
 
         loss = self.criterion(output, trg)
-        return loss
+        return {'loss': loss}
 
     def gen_translate(self, batch):
         src = batch.src
         trg = batch.trg
-        output = self.model.gen_translate(src, trg[:-1])
-        # trg = [trg sent len, batch size]
-        # output = [trg sent len, batch size, output dim]
+        _, output = self.model.gen_translate(src, trg[:-1], greedy=True)
         vocab = self.model.trg_vocab
 
         org = [get_text(x, vocab) for x in trg.cpu().numpy().T]
-        gen = [get_text(x, vocab) for x in output]
+        gen = [get_text(x, vocab) for x in output.cpu().numpy().T]
         return org, gen
 
     def increase_teacher_ratio(self):
@@ -188,3 +187,9 @@ class MainStage:
         scheduler_params = self.config['scheduler_params']
         scheduler = scheduler_class(self.opt, **scheduler_params)
         return scheduler
+
+    def add_to_window(self, loss_dict: dict, window):
+        window = window or {key: deque(maxlen=self.config['log_window_size']) for key in loss_dict}
+        for key, loss in loss_dict.items():
+            window[key] = loss.cpu().data.numpy()
+        return window

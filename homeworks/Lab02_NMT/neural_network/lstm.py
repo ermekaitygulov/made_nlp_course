@@ -2,10 +2,10 @@ import random
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from neural_network import NN_CATALOG, BaseModel
 from utils import add_to_catalog
-from beam_search import Node
 
 
 class Encoder(nn.Module):
@@ -363,7 +363,7 @@ class LSTMTeacher(BaseModel):
         assert self.encoder.n_layers == self.decoder.n_layers, \
             "Encoder and decoder must have equal number of layers!"
 
-    def forward(self, src, trg, teacher_forcing_ratio=0.):
+    def forward(self, src, trg, teacher_forcing_ratio=0., greedy=True):
         # src = [src sent len, batch size]
         # trg = [trg sent len, batch size]
         # teacher_forcing_ratio is probability to use teacher forcing
@@ -377,65 +377,34 @@ class LSTMTeacher(BaseModel):
 
         # tensor to store decoder outputs
         outputs = torch.zeros(max_len, batch_size, trg_vocab_size).to(self.device)
-
+        seq = torch.zeros(max_len, batch_size, dtype=torch.int32).to(self.device)
         # last hidden state of the encoder is used as the initial hidden state of the decoder
         enc_output = self.encoder(src)
         enc_outputs, hidden, cell = enc_output['rnn_out'], enc_output['rnn_hidden'], enc_output['rnn_cell']
 
         # first input to the decoder is the <sos> tokens
-        top1 = None
+        token_predict = None
+
+        finished = torch.full((batch_size,), fill_value=False).to(self.device)
         for t in range(max_len):
-            teacher_force = t > teacher_start and top1 is not None
-            dec_input = top1 if teacher_force else trg[t]
+            teacher_force = t > teacher_start and token_predict is not None
+            dec_input = token_predict if teacher_force else trg[t]
             dec_output = self.decoder(dec_input, hidden, cell, enc_outputs)
             output, hidden, cell = dec_output['prediction'], dec_output['rnn_hidden'], dec_output['rnn_cell']
             outputs[t] = output
-            top1 = output.max(1)[1]
-        return outputs
 
-    # def gen_translate(self, src, trg):
-    #     batch_size = src.shape[1]
-    #     outputs = []
-    #     for i in range(batch_size):
-    #         outputs.append(self.beam_search(src[:, i:i+1], self.beam_width, 1, max_length=self.max_length)[0])
-    #     return outputs
-    #
-    # # beam search
-    # def beam_search(self, src, beam_width=4, num_hypotheses=1, max_length=500):
-    #     # last hidden state of the encoder is used as the initial hidden state of the decoder
-    #     enc_output = self.encoder(src)
-    #     memory, hidden, cell = enc_output['rnn_out'], enc_output['rnn_hidden'], enc_output['rnn_cell']
-    #
-    #     fringe = [Node(parent=None, state=(hidden, cell),
-    #                    value=torch.tensor(self.sos_idx).to(self.device), cost=0.0)]
-    #     hypotheses = []
-    #
-    #     for _ in range(max_length):
-    #         cur_token = torch.cat([n.value.unsqueeze(0) for n in fringe])
-    #         hidden_batch = torch.cat([n.state[0] for n in fringe], dim=1)
-    #         cell_batch = torch.cat([n.state[1] for n in fringe], dim=1)
-    #         memory_batch = torch.cat([memory for _ in fringe], dim=1)
-    #
-    #         dec_output = self.decoder(cur_token, hidden_batch, cell_batch, memory_batch)
-    #         log_p_batch = torch.log_softmax(dec_output['prediction'], -1)
-    #         hidden_batch = dec_output['rnn_hidden']
-    #         cell_batch = dec_output['rnn_cell']
-    #
-    #         next_token = torch.argsort(log_p_batch, dim=-1, descending=True)[:, :beam_width]
-    #
-    #         for i, (token_list, log_p, parent) in enumerate(zip(next_token, log_p_batch, fringe)):
-    #             hid = hidden_batch[:, i:i+1]
-    #             cell = cell_batch[:, i:i+1]
-    #
-    #             for candidate, candidate_score in zip(token_list, log_p):
-    #                 n_new = Node(parent=parent, state=(hid, cell), value=candidate, cost=candidate_score)
-    #                 if n_new.value == self.eos_idx:
-    #                     hypotheses.append(n_new)
-    #                 else:
-    #                     fringe.append(n_new)
-    #         if not fringe:
-    #             break
-    #         fringe = sorted(fringe, key=lambda node: node.cum_cost / node.length, reverse=True)[:beam_width]
-    #     hypotheses.extend(fringe)
-    #     hypotheses.sort(key=lambda node: node.cum_cost / node.length)
-    #     return [node.to_sequence_of_values() for node in hypotheses[:num_hypotheses]]
+            token_predict = self.sample_token(output, greedy, finished)
+            seq[t] = token_predict
+
+            is_eos = torch.eq(token_predict, self.eos_idx)
+            finished = torch.logical_or(finished, is_eos)
+        return outputs, seq
+
+    def sample_token(self, logits, greedy, finished):
+        if greedy:
+            token = logits.max(1)[1]
+        else:
+            probs = F.softmax(logits, dim=-1)
+            token = torch.multinomial(probs, 1)[:, 0]
+        token = torch.where(finished, self.pad_idx, token)
+        return token
